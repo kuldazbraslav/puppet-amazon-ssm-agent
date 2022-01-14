@@ -6,6 +6,11 @@
 # Parameters
 # ----------
 #
+# * `ensure`
+# Data Type: String
+# Ensure state of the package. Can be 'present', 'latest', 'absent'
+# Default value: 'latest'
+#
 # * `region`
 # Data Type: String
 # The AWS region from where the package will be downloaded
@@ -16,15 +21,20 @@
 # The proxy URL in <protocol>://<host>:<port> format, specify if the ssm agent needs to communicate via a proxy
 # Default value: undef
 #
-# * `service_enable`
-# Data Type: Boolean
-# Ensure state of the service. Can be 'running', 'stopped', true, or false
+# * `service_ensure`
+# Data Type: String
+# Ensure state of the service. Can be 'running', 'stopped'
 # Default value: 'running'
 #
-# * `service_ensure`
-# Data Type: String, Boolean
+# * `service_enable`
+# Data Type: Boolean
 # Whether to enable the service.
 # Default value: true
+#
+# * `pkg_dir`
+# Data Type: String
+# Download location for the package.
+# Default value: '/tmp'
 #
 #
 # Examples
@@ -46,10 +56,12 @@
 # Copyright 2017-2019 Shine Solutions, unless otherwise noted.
 #
 class amazon_ssm_agent (
+  String $ensure              = latest,
   String $region              = 'us-east-1',
   Optional[String] $proxy_url = undef,
   Boolean $service_enable     = true,
-  $service_ensure             = 'running',
+  String $service_ensure      = 'running',
+  String $pkg_dir             = '/tmp',
   ) {
 
     $pkg_provider = lookup('amazon_ssm_agent::pkg_provider', String, 'first')
@@ -57,6 +69,8 @@ class amazon_ssm_agent (
     $flavor       = lookup('amazon_ssm_agent::flavor', String, 'first')
 
     $srv_provider = lookup('amazon_ssm_agent::srv_provider', String, 'first')
+
+    $pkg_local_path = "${pkg_dir}/amazon-ssm-agent.${pkg_format}"
 
     case $facts['os']['architecture'] {
       'x86_64','amd64': {
@@ -73,16 +87,26 @@ class amazon_ssm_agent (
       }
     }
 
-    archive {"/tmp/amazon-ssm-agent.${pkg_format}":
-      ensure  => present,
+    $_archive_ensure = $ensure ? {
+      absent  => absent,
+      default => present,
+    }
+
+    $_archive_after_install_ensure = $ensure ? {
+      latest  => absent,
+      default => $ensure,
+    }
+
+    archive {$pkg_local_path:
+      ensure  => $_archive_ensure,
       extract => false,
       cleanup => false,
       source  => "https://amazon-ssm-${region}.s3.amazonaws.com/latest/${flavor}_${architecture}/amazon-ssm-agent.${pkg_format}",
-      creates => "/tmp/amazon-ssm-agent.${pkg_format}",
-    } -> package { 'amazon-ssm-agent':
-      ensure   => latest,
+    }
+    -> package { 'amazon-ssm-agent':
+      ensure   => $ensure,
       provider => $pkg_provider,
-      source   => "/tmp/amazon-ssm-agent.${pkg_format}",
+      source   => $pkg_local_path,
     }
 
     if $service_ensure {
@@ -101,8 +125,8 @@ class amazon_ssm_agent (
       Class['::amazon_ssm_agent::proxy'] -> Service['amazon-ssm-agent']
     }
 
-    file {"/tmp/amazon-ssm-agent.${pkg_format}":
-      ensure  => absent,
+    file {$pkg_local_path:
+      ensure  => $_archive_after_install_ensure,
       require => Package['amazon-ssm-agent'],
     }
 }
