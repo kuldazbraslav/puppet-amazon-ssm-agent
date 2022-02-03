@@ -11,11 +11,6 @@
 # Ensure state of the package. Can be 'present', 'latest', 'absent'
 # Default value: 'latest'
 #
-# * `region`
-# Data Type: String
-# The AWS region from where the package will be downloaded
-# Default value: us-east-1
-#
 # * `proxy_url`
 # Data Type: String
 # The proxy URL in <protocol>://<host>:<port> format, specify if the ssm agent needs to communicate via a proxy
@@ -41,7 +36,6 @@
 # --------
 # @example
 #    class { 'amazon_ssm_agent':
-#      region    => 'ap-southeast-2',
 #      proxy_url => 'http://someproxy:3128',
 #    }
 #
@@ -57,7 +51,6 @@
 #
 class amazon_ssm_agent (
   String $ensure              = latest,
-  String $region              = 'us-east-1',
   Optional[String] $proxy_url = undef,
   Boolean $service_enable     = true,
   String $service_ensure      = 'running',
@@ -101,7 +94,7 @@ class amazon_ssm_agent (
       ensure  => $_archive_ensure,
       extract => false,
       cleanup => false,
-      source  => "https://amazon-ssm-${region}.s3.amazonaws.com/latest/${flavor}_${architecture}/amazon-ssm-agent.${pkg_format}",
+      source  => "https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/${flavor}_${architecture}/amazon-ssm-agent.${pkg_format}",
     }
     -> package { 'amazon-ssm-agent':
       ensure   => $ensure,
